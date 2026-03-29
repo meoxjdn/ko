@@ -13,6 +13,7 @@ void hbp_handler(struct perf_event *bp, struct perf_sample_data *data, struct pt
     if (*active) return;
     *active = 1;
 
+    // 1. FOV (全屏广角)
     if (g_fov_on && pc == base_addr + OFF_FOV) {
         struct user_fpsimd_state *fpsimd = &current->thread.fpsimd_state;
         ((__u32 *)&fpsimd->vregs[0])[0] = 0x4089999A; 
@@ -21,29 +22,38 @@ void hbp_handler(struct perf_event *bp, struct perf_sample_data *data, struct pt
         goto out;
     }
 
+    // 2. 去黑边
     if (g_border_on && pc == base_addr + OFF_BORDER) {
         regs->pc = regs->regs[30]; 
         goto out;
     }
 
+    // 3. 副本秒过
     if (g_skip_on && pc == base_addr + OFF_SKIP) {
         regs->pc = base_addr + OFF_SKIP_JMP; 
         goto out;
     }
 
+    // 4. Damage (无敌敌我识别)
     if (g_damage_on && pc == base_addr + OFF_DAMAGE) {
         uint32_t team_id = 0;
         void __user *ptr = (void __user *)(regs->regs[1] + 0x1c);
         
         if (regs->regs[1] != 0 && access_ok(ptr, 4)) {
-            if (copy_from_user_nofault(&team_id, ptr, 4) == 0 && team_id == 0) {
-                regs->regs[0] = 1; 
-                regs->pc = regs->regs[30]; 
+            // 使用最通用的原子态拷贝，确保在 HBP 中断中不炸内核
+            pagefault_disable();
+            if (__copy_from_user_inatomic(&team_id, ptr, 4) == 0) {
+                if (team_id == 0) { // 玩家阵营
+                    regs->regs[0] = 1; 
+                    regs->pc = regs->regs[30]; 
+                }
             }
+            pagefault_enable();
         }
         goto out;
     }
 
+    // 5. 最大血量
     if (g_maxhp_on && pc == base_addr + OFF_MAXHP) {
         regs->regs[0] = 1;
         regs->pc = regs->regs[30];
