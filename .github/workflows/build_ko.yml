@@ -1,0 +1,54 @@
+name: Build HBP Kernel Module (GKI 6.1 & 6.6)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # 允许你在网页端手动点击运行
+
+jobs:
+  build:
+    name: Build for GKI ${{ matrix.kernel_version }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - kernel_version: "6.1"
+            branch: "android14-6.1"
+          - kernel_version: "6.6"
+            branch: "android15-6.6"
+      fail-fast: false # 即使 6.1 失败了，也让 6.6 继续编译
+
+    steps:
+    - name: Checkout Module Source
+      uses: actions/checkout@v4
+      with:
+        path: hbp_module
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y flex bison build-essential bc libelf-dev libssl-dev clang llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+    - name: Clone GKI Kernel Source (${{ matrix.branch }})
+      run: |
+        # 只拉取浅层代码 (depth=1)，节省大量时间和空间
+        git clone --depth=1 -b ${{ matrix.branch }} https://android.googlesource.com/kernel/common kernel_source
+
+    - name: Prepare Kernel Environment
+      working-directory: kernel_source
+      run: |
+        # 生成 GKI 默认配置并准备编译模块所需的环境
+        make O=out ARCH=arm64 LLVM=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+        make O=out ARCH=arm64 LLVM=1 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j$(nproc)
+
+    - name: Compile HBP Module
+      working-directory: hbp_module
+      run: |
+        # 指向刚才准备好的内核源码 out 目录进行编译
+        make KDIR=$GITHUB_WORKSPACE/kernel_source/out ARCH=arm64 LLVM=1 CROSS_COMPILE=aarch64-linux-gnu-
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hbp_ko_${{ matrix.kernel_version }}
+        path: hbp_module/*.ko
