@@ -3,7 +3,6 @@
 #include <linux/version.h>
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
-#include <linux/sched/signal.h>
 
 #define MAX_BP 128
 static struct perf_event *bps[MAX_BP];
@@ -23,7 +22,7 @@ static void install_bp_thread(struct task_struct *task, unsigned long addr) {
     if (bp_count >= MAX_BP) return;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
-    // 6.1+ 使用底层接口以保留 task 指定能力
+    // 6.1+ 必须使用底层接口来指定特定 task
     bp = perf_event_create_kernel_counter(&attr, -1, task, hbp_handler, NULL);
 #else
     bp = register_user_hw_breakpoint(&attr, hbp_handler, NULL, task);
