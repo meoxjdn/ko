@@ -25,7 +25,6 @@ static int __init hbp_init(void) {
         return -ENOMEM;
     }
 
-    [span_2](start_span)// 修复 GKI 6.6 的 class_create 参数变更[span_2](end_span)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
     hbp_class = class_create("hbp"); 
 #else
