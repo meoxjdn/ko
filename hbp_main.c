@@ -6,13 +6,7 @@ static dev_t devno;
 static struct cdev hbp_cdev;
 static struct class *hbp_class;
 
-int g_mode = 0;
-int g_fov_on = 0;
-int g_border_on = 0;
-int g_skip_on = 0;
-int g_damage_on = 0;
-int g_maxhp_on = 0;
-
+int g_mode = 0, g_fov_on = 0, g_border_on = 0, g_skip_on = 0, g_damage_on = 0, g_maxhp_on = 0;
 struct task_struct *target_task = NULL;
 unsigned long base_addr = 0;
 
@@ -23,32 +17,37 @@ static struct file_operations fops = {
     .unlocked_ioctl = hbp_ioctl,
 };
 
-static int __init hbp_init(void)
-{
-    alloc_chrdev_region(&devno, 0, 1, "hbp");
+static int __init hbp_init(void) {
+    if (alloc_chrdev_region(&devno, 0, 1, "hbp") < 0) return -EBUSY;
     cdev_init(&hbp_cdev, &fops);
-    cdev_add(&hbp_cdev, devno, 1);
+    if (cdev_add(&hbp_cdev, devno, 1) < 0) {
+        unregister_chrdev_region(devno, 1);
+        return -ENOMEM;
+    }
 
-    [span_3](start_span)// 修复 GKI 6.6 (Linux 6.4+) 的参数变更[span_3](end_span)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-    hbp_class = class_create("hbp");
+    hbp_class = class_create("hbp"); [span_2](start_span)// 6.4+ 仅需一个参数[span_2](end_span)
 #else
-    hbp_class = class_create(THIS_MODULE, "hbp");
+    hbp_class = class_create(THIS_MODULE, "hbp"); [span_3](start_span)// 旧版需两个参数[span_3](end_span)
 #endif
 
+    if (IS_ERR(hbp_class)) {
+        cdev_del(&hbp_cdev);
+        unregister_chrdev_region(devno, 1);
+        return PTR_ERR(hbp_class);
+    }
+
     device_create(hbp_class, NULL, devno, NULL, "hbp");
-    printk("[HBP] Driver Loaded\n");
+    pr_info("[HBP] GKI Ready Driver Loaded\n");
     return 0;
 }
 
-static void __exit hbp_exit(void)
-{
+static void __exit hbp_exit(void) {
     uninstall_breakpoints();
     device_destroy(hbp_class, devno);
     class_destroy(hbp_class);
     cdev_del(&hbp_cdev);
     unregister_chrdev_region(devno, 1);
-    printk("[HBP] Driver Unloaded\n");
 }
 
 module_init(hbp_init);
