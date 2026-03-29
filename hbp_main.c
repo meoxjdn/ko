@@ -25,10 +25,11 @@ static int __init hbp_init(void) {
         return -ENOMEM;
     }
 
+    [span_2](start_span)// 修复 GKI 6.6 的 class_create 参数变更[span_2](end_span)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-    hbp_class = class_create("hbp"); [span_2](start_span)// 6.4+ 仅需一个参数[span_2](end_span)
+    hbp_class = class_create("hbp"); 
 #else
-    hbp_class = class_create(THIS_MODULE, "hbp"); [span_3](start_span)// 旧版需两个参数[span_3](end_span)
+    hbp_class = class_create(THIS_MODULE, "hbp");
 #endif
 
     if (IS_ERR(hbp_class)) {
@@ -38,7 +39,7 @@ static int __init hbp_init(void) {
     }
 
     device_create(hbp_class, NULL, devno, NULL, "hbp");
-    pr_info("[HBP] GKI Ready Driver Loaded\n");
+    pr_info("[HBP] GKI 6.1/6.6 Compatible Loaded\n");
     return 0;
 }
 
